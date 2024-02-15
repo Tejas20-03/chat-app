@@ -6,6 +6,10 @@ const { Server } = require("socket.io");
 
 app.use(cors());
 
+app.use("/", (req, res) => {
+  res.json({ message: "Backend Running" });
+});
+
 const server = http.createServer(app);
 
 const io = new Server(server, {
