@@ -1,62 +1,36 @@
 const express = require("express");
 const app = express();
 const http = require("http");
+const cors = require("cors");
 const { Server } = require("socket.io");
-const ACTIONS = require("./Actions");
+
+app.use(cors());
 
 const server = http.createServer(app);
 
-const io = new Server(server);
-
-const userSocketMap = {};
-
-const getAllConnectedUsers = (roomId) => {
-  return Array.from(io.sockets.adapter.rooms.get(roomId) || []).map(
-    (socketId) => {
-      return {
-        socketId,
-        username: userSocketMap[socketId],
-      };
-    }
-  );
-};
+const io = new Server(server, {
+  cors: {
+    origin: "http://localhost:3000",
+    methods: ["GET", "POST"],
+  },
+});
 
 io.on("connection", (socket) => {
-  socket.on(ACTIONS.JOIN, ({ roomId, username }) => {
-    userSocketMap[socket.id] = username;
-    socket.join(roomId);
+  console.log(`User Connected: ${socket.id}`);
 
-    const users = getAllConnectedUsers(roomId);
+  socket.on("join_room", (data) => {
+    socket.join(data);
+    console.log(`User with ID: ${socket.id} joined room: ${data}`);
+  });
 
-    users.forEach(({ socketId }) => {
-      io.to(socketId).emit(ACTIONS.JOINED, {
-        users,
-        username,
-        socketId: socket.id,
-      });
-    });
+  socket.on("send_message", (data) => {
+    socket.to(data.room).emit("receive_message", data);
+  });
+
+  socket.on("disconnect", () => {
+    console.log("User Disconnected", socket.id);
   });
 });
 
-socket.on(ACTIONS.CHANGE, ({ roomId, chat }) => {
-  socket.in(roomId).emit(ACTIONS.CHANGE, { chat });
-});
-
-socket.on(ACTIONS.SYNC, ({ socketId, chat }) => {
-  io.to(socketId).emit(ACTIONS.SYNC, { code });
-});
-
-socket.on("disconnecting", () => {
-  const rooms = [...socket.rooms];
-  rooms.forEach((roomId) => {
-    socket.in(roomId).emit(ACTIONS.DISCONNECTED, {
-      socketId: socket.id,
-      username: userSocketMap[socket.id],
-    });
-  });
-  delete userSocketMap[socket.id];
-  socket.leave();
-});
-
-const PORT = process.env.PORT;
+const PORT = process.env.PORT || 3001;
 server.listen(PORT, () => console.log(`Server is running on port ${PORT}`));
